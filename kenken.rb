@@ -1,6 +1,6 @@
-#Test 5x5 puzzle input string
-#5 2/ 0 1 | 12* 2 7 | 4- 3 8 | 2- 4 9 | 12+ 5 10 15 | 10* 6 11 16 | 3+ 12 17 | 2. 13 | 11+ 14 19 24 | 12+ 18 22 23 | 2- 20 21
-
+#Test 5x5 puzzle input strings
+#5 2/ 0 1 | 12* 2 7 | 4- 3 8 | 2- 4 9 | 12+ 5 10 15 | 10* 6 11 16 | 3+ 12 17 | 2. 13 | 11+ 14 19 24 | 12+ 18 22 23 | 2- 20 21 |
+# 5 24* 0 5 6 7 | 4- 1 2 | 10+ 3 8 9 | 4. 4 | 2- 10 11 | 10* 12 17 | 5+ 13 14 | 2- 15 20 | 2/ 16 21 | 2/ 18 23 | 15* 19 24 | 4. 22 |
 module KenKen
 	class Invalid < StandardError
 	end
@@ -69,6 +69,14 @@ module KenKen
 	    true
   	end
   	
+  	def number_of_rows(grid_side_length)
+      @indices.map{|i| i/grid_side_length}.uniq.size
+  	end
+  	
+  	def number_of_cols(grid_side_length)
+  	  @indices.map{|i| i % grid_side_length}.uniq.size
+  	end
+  	
   	def to_s
   	  "#{@target}#{@operation} #{@indices.join(" ")}"
   	end
@@ -106,10 +114,12 @@ module KenKen
         coveredIndices.concat(cage.indices)
       end
       
+      coveredIndices.sort!
+      
       gridIndices = (0..@grid_size-1).to_a
       
-      unless coveredIndices.sort == gridIndices
-        raise Invalid, "The indexes #{coveredIndices} covered by the cages does not match #{gridIndices}" 
+      unless coveredIndices == gridIndices
+        raise Invalid, "The indexes #{gridIndices - coveredIndices} are not covered by the cages." 
       end
       
       #Finally check that all cages are connected
@@ -118,6 +128,16 @@ module KenKen
           raise Invalid, "The cage #{cage} is not connected in a grid of size #{@grid_side_length}"
         end
       end
+    end
+    
+    def dup
+      copy = super
+      @grid = @grid.dup
+      copy
+    end
+    
+    def grid_side_length
+      @grid_side_length
     end
     
     def all_digits
@@ -139,14 +159,42 @@ module KenKen
       0.upto(@grid_side_length - 1) do |row|
         0.upto(@grid_side_length - 1) do |col|
           next unless self[row,col] == nil
-          cage = cage_at(row, col)
-          yield row, col, cage
+          yield row, col
         end
       end
     end
     
-    private
-    
+    def available_digits(row, col)
+      cage = cage_at(row, col)
+      
+      if (cage.operation == ".") 
+        return [cage.target]
+      end
+      
+      available = all_digits - row_digits(row) - col_digits(col)
+      
+      #Need to intersect these now with the allowed values inside the cage
+      #To get at the allowed cage values 
+      solved_digits = cage_digits(cage)
+      new_targets = []
+      if (solved_digits.size == 0)
+        new_targets << cage.target
+      else
+        new_targets.concat(Math.calc_all_perms(Math.inverse_operation(cage.operation), [cage.target].concat(solved_digits)))
+      end
+      
+      valid_digits = []
+      allow_dups = [cage.number_of_rows(@grid_side_length), cage.number_of_cols(@grid_side_length)].min > 1
+      number_of_unknowns = cage.indices.size - solved_digits.size
+      
+      new_targets.each do |t|
+        solution_sets = Math.solution_set(t, cage.operation, number_of_unknowns, @grid_side_length, 1, allow_dups)
+        valid_digits.concat(solution_sets.flatten)
+      end
+      
+      (available & valid_digits).uniq
+    end
+      
     def row_digits(row)
       @grid[row*@grid_side_length, @grid_side_length].compact
     end
@@ -192,7 +240,7 @@ module KenKen
         if (index == 0)
           result = operand
         else
-          eval "result #{operation}= operand"
+          eval "result #{operation}= operand#{operation == "/" ? "*1.0" : ""}"
         end
       end
       result
@@ -237,13 +285,54 @@ module KenKen
     end
     
     #Brute force checks the various integral combinations
-    def solution_set(target, operation, number_of_unknowns, max, min=1)
-      possible_values = (min..max).to_a
+    def solution_set(target, operation, number_of_unknowns, max, min=1, duplicateOperands=false)
+      range = (min..max).to_a
+      possible_values = [].concat(range)
+      
+      if (duplicateOperands)
+        (min + 1).upto(max) do |n|
+          possible_values = possible_values.concat(range)
+        end
+      end
+      
       solution_sets = []
       possible_values.combination(number_of_unknowns) do |combination|
         solution_sets << combination if calc_all_perms(operation, combination).include?(target)
       end
-      solution_sets
+      solution_sets.uniq
     end
+  end
+  
+  #An exception raised when no solution is possible
+  def Impossible < StandardError
+  end
+  
+  def KenKen.scan(puzzle)
+    puzzle_unchanged = false
+    
+    until puzzle_unchanged
+      puzzle_unchanged = true
+      row_min, col_min, possibilities_min = nil
+      min = puzzle.grid_side_length + 1
+      
+      puzzle.each_unknown do |row, col|
+        possibilities = puzzle.available_digits(row, col)
+        
+        case possibilities.size
+        when 0
+          raise Impossible
+        when 1
+          puzzle[row, col] = possibilities[0]
+          puzzle_unchanged = false
+        else
+          if puzzle_unchanged && possibilities.size < min
+            min = possibilities.size
+            row_min, col_min, possibilities_min = row, col, possibilities
+          end
+        end
+      end
+    end
+    
+    return row_min, col_min, possibilities_min
   end
 end
