@@ -37,18 +37,6 @@ module KenKen
   	  @indices = $~[:indices].split(" ").map{|s| s.to_i}	  
   	end
   	
-  	#Pass in an array of positive integers
-  	#Attempts to reach the target by applying the operation to the values over all orderings
-  	def is_solved?(values)
-  	  return false unless values.size == indices.size
-  	  
-  	  if @operation == "."
-  	    values[0] == @target
-  	  else
-  	    Math.calc_all_perms(@operation, values).include?(@target)
-  	  end
-  	end
-  	
   	def is_connected?(grid_side_length)
   	  return true if @indices.size == 1
   	   	  
@@ -164,7 +152,12 @@ module KenKen
       end
     end
     
+    def to_s
+      (0..(@grid_side_length - 1)).map{|row| @grid[row*@grid_side_length, @grid_side_length].map{|cell| cell || 0}.join(" ")}.join("\n")
+    end
+    
     def available_digits(row, col)
+      #puts "Checking cell (#{row}, #{col})"
       cage = cage_at(row, col)
       
       if (cage.operation == ".") 
@@ -180,7 +173,15 @@ module KenKen
       if (solved_digits.size == 0)
         new_targets << cage.target
       else
-        new_targets.concat(Math.calc_all_perms(Math.inverse_operation(cage.operation), [cage.target].concat(solved_digits)))
+        if Math.is_commutative?(cage.operation)
+          sub_result = Math.calculate(cage.operation, solved_digits)
+          new_targets << Math.calculate(Math.inverse_operation(cage.operation), [cage.target, sub_result])
+        else
+          sub_result = Math.calculate(Math.inverse_operation(cage.operation), solved_digits)
+          new_targets << Math.calculate(Math.inverse_operation(cage.operation), [cage.target, sub_result])
+          new_targets.concat(Math.calc_all_perms(cage.operation, [cage.target].concat(solved_digits)).select{|n| n > 0})
+        end
+        #puts "New targets: #{new_targets}"
       end
       
       valid_digits = []
@@ -221,10 +222,6 @@ module KenKen
     def cage_at(row, col)
       cage_for_index(row*@grid_side_length + col)
     end
-    
-    def is_cage_solved?(cage)
-      cage.is_solved?(cage_digits(cage))
-    end
   end
 
   #
@@ -240,7 +237,7 @@ module KenKen
         if (index == 0)
           result = operand
         else
-          eval "result #{operation}= operand#{operation == "/" ? "*1.0" : ""}"
+          eval "result #{operation}= operand"#"#{operation == "/" ? "*1.0" : ""}"
         end
       end
       result
@@ -288,6 +285,10 @@ module KenKen
     def solution_set(target, operation, number_of_unknowns, max, min=1, duplicateOperands=false)
       range = (min..max).to_a
       possible_values = [].concat(range)
+           
+      if (number_of_unknowns == 1)
+          return [[target] & possible_values]
+      end
       
       if (duplicateOperands)
         (min + 1).upto(max) do |n|
@@ -304,7 +305,7 @@ module KenKen
   end
   
   #An exception raised when no solution is possible
-  def Impossible < StandardError
+  class Impossible < StandardError
   end
   
   def KenKen.scan(puzzle)
@@ -320,9 +321,17 @@ module KenKen
         
         case possibilities.size
         when 0
+          puts "?????????????????????????????????"
+          puts "Impossible! No values for cell (#{row}, #{col})"
+          puts "#{puzzle}"
+          puts "?????????????????????????????????"
           raise Impossible
         when 1
           puzzle[row, col] = possibilities[0]
+          puts "================================="
+          puts "(#{row}, #{col}) is #{possibilities[0]}"
+          puts "#{puzzle}"
+          puts "================================="
           puzzle_unchanged = false
         else
           if puzzle_unchanged && possibilities.size < min
@@ -334,5 +343,29 @@ module KenKen
     end
     
     return row_min, col_min, possibilities_min
+  end
+  
+  def KenKen.solve(puzzle)
+    puzzle_copy = puzzle.dup
+    
+    row, col, possibilities = scan(puzzle_copy)
+    
+    return puzzle_copy if row == nil
+    
+    possibilities.each do |possibility|
+      puzzle_copy[row, col] = possibility      
+      puts "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+      puts "Guessing #{possibility} in cell (#{row}, #{col})"
+      puts "#{puzzle_copy}"
+      puts "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+      
+      begin
+        return solve(puzzle_copy)
+      rescue Impossible
+        next
+      end
+    end
+    
+    raise Impossible
   end
 end
