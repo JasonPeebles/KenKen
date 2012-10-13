@@ -1,6 +1,8 @@
 #Test 5x5 puzzle input strings
 #5 2/ 0 1 | 12* 2 7 | 4- 3 8 | 2- 4 9 | 12+ 5 10 15 | 10* 6 11 16 | 3+ 12 17 | 2. 13 | 11+ 14 19 24 | 12+ 18 22 23 | 2- 20 21 |
 # 5 24* 0 5 6 7 | 4- 1 2 | 10+ 3 8 9 | 4. 4 | 2- 10 11 | 10* 12 17 | 5+ 13 14 | 2- 15 20 | 2/ 16 21 | 2/ 18 23 | 15* 19 24 | 4. 22 |
+require 'set'
+
 module KenKen
 	class Invalid < StandardError
 	end
@@ -27,29 +29,73 @@ module KenKen
       @indices
     end
     
-  	def initialize(line)
+    def grid_side_length=(val)
+      @grid_side_length = val
+    end
+    
+    #Pass in an array of values, computes the remaining allowed values to solve the cage
+    def choices_for_values(values)
+      key = values.to_set
+      
+      return @choices_hash[key] if @choices_hash[key] != nil
+      
+      if (@operation == ".")
+        @choices_hash[key] = [@target]
+      else
+        new_targets = []
+        if (values.size == 0)
+          new_targets << @target
+        else
+          if Math.is_commutative?(@operation)
+            sub_result = Math.calculate(@operation, values)
+            new_targets << Math.calculate(Math.inverse_operation(@operation), [@target, sub_result])
+          else
+            sub_result = Math.calculate(Math.inverse_operation(@operation), values)
+            new_targets << Math.calculate(Math.inverse_operation(@operation), [@target, sub_result])
+            new_targets.concat(Math.calc_all_perms(@operation, [@target].concat(values)).select{|n| n > 0})
+          end
+          #puts "New targets: #{new_targets}"
+        end
+
+        valid_digits = []
+        allow_dups = [number_of_rows, number_of_cols].min > 1
+        number_of_unknowns = @indices.size - values.size
+
+        new_targets.each do |t|
+          solution_sets = Math.solution_set(t, @operation, number_of_unknowns, @grid_side_length, 1, allow_dups)
+          valid_digits.concat(solution_sets.flatten)
+        end
+        
+        @choices_hash[key] = valid_digits.uniq
+      end
+      @choices_hash[key]
+    end
+    
+  	def initialize(line, side_length)
   	  unless (Regexp.new(CagePattern) =~ line) == 0
   	    raise Invalid, "#{line} is not a valid Cage specifier"
   	  end 
   	  
   	  @operation = $~[:operation]
   	  @target = $~[:target].to_i
-  	  @indices = $~[:indices].split(" ").map{|s| s.to_i}	  
+  	  @indices = $~[:indices].split(" ").map{|s| s.to_i}
+  	  @grid_side_length = side_length
+  	  @choices_hash = {}
   	end
   	
-  	def is_connected?(grid_side_length)
+  	def is_connected?
   	  return true if @indices.size == 1
   	   	  
   	  @indices.each do |index|
   	    candidates = []
   	    #Is the cell on the top edge of the grid?
-  	    candidates << index - grid_side_length if index/grid_side_length > 0
+  	    candidates << index - @grid_side_length if index/@grid_side_length > 0
   	    #Bottom edge?
-  	    candidates << index + grid_side_length if index/grid_side_length < grid_side_length
+  	    candidates << index + @grid_side_length if index/@grid_side_length < @grid_side_length
   	    #Left edge? 
-  	    candidates << index - 1 if index % grid_side_length != 0
+  	    candidates << index - 1 if index % @grid_side_length != 0
   	    #Right edge?
-  	    candidates << index + 1 if (index + 1) % grid_side_length != 0
+  	    candidates << index + 1 if (index + 1) % @grid_side_length != 0
   	    
   	    return false if (@indices & candidates).size == 0
 	    end
@@ -57,12 +103,12 @@ module KenKen
 	    true
   	end
   	
-  	def number_of_rows(grid_side_length)
-      @indices.map{|i| i/grid_side_length}.uniq.size
+  	def number_of_rows
+      @indices.map{|i| i/@grid_side_length}.uniq.size
   	end
   	
-  	def number_of_cols(grid_side_length)
-  	  @indices.map{|i| i % grid_side_length}.uniq.size
+  	def number_of_cols
+  	  @indices.map{|i| i % @grid_side_length}.uniq.size
   	end
   	
   	def to_s
@@ -92,7 +138,7 @@ module KenKen
       cageRegExp =~ cageSpecifiers
       
       while $~ do
-        @cages << Cage.new($~.to_s)
+        @cages << Cage.new($~.to_s, @grid_side_length)
         cageRegExp =~ $~.post_match
       end
         
@@ -112,7 +158,7 @@ module KenKen
       
       #Finally check that all cages are connected
       @cages.each do |cage|
-        unless cage.is_connected?(@grid_side_length)
+        unless cage.is_connected?
           raise Invalid, "The cage #{cage} is not connected in a grid of size #{@grid_side_length}"
         end
       end
@@ -167,33 +213,9 @@ module KenKen
       available = all_digits - row_digits(row) - col_digits(col)
       
       #Need to intersect these now with the allowed values inside the cage
-      #To get at the allowed cage values 
       solved_digits = cage_digits(cage)
-      new_targets = []
-      if (solved_digits.size == 0)
-        new_targets << cage.target
-      else
-        if Math.is_commutative?(cage.operation)
-          sub_result = Math.calculate(cage.operation, solved_digits)
-          new_targets << Math.calculate(Math.inverse_operation(cage.operation), [cage.target, sub_result])
-        else
-          sub_result = Math.calculate(Math.inverse_operation(cage.operation), solved_digits)
-          new_targets << Math.calculate(Math.inverse_operation(cage.operation), [cage.target, sub_result])
-          new_targets.concat(Math.calc_all_perms(cage.operation, [cage.target].concat(solved_digits)).select{|n| n > 0})
-        end
-        #puts "New targets: #{new_targets}"
-      end
       
-      valid_digits = []
-      allow_dups = [cage.number_of_rows(@grid_side_length), cage.number_of_cols(@grid_side_length)].min > 1
-      number_of_unknowns = cage.indices.size - solved_digits.size
-      
-      new_targets.each do |t|
-        solution_sets = Math.solution_set(t, cage.operation, number_of_unknowns, @grid_side_length, 1, allow_dups)
-        valid_digits.concat(solution_sets.flatten)
-      end
-      
-      (available & valid_digits).uniq
+      (available & cage.choices_for_values(solved_digits)).uniq
     end
       
     def row_digits(row)
@@ -350,7 +372,10 @@ module KenKen
     
     row, col, possibilities = scan(puzzle_copy)
     
-    return puzzle_copy if row == nil
+    if row == nil
+      puts "SOLVED!"
+      return puzzle_copy
+    end
     
     possibilities.each do |possibility|
       puzzle_copy[row, col] = possibility      
