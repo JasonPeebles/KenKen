@@ -34,41 +34,40 @@ module KenKen
     end
     
     #Pass in an array of values, computes the remaining allowed values to solve the cage
-    def choices_for_values(values)
-      key = values.to_set
-      
-      return @choices_hash[key] if @choices_hash[key] != nil
+    def choices_for_values(partial_solution_hash)    
+      return @choices_hash[partial_solution_hash] if @choices_hash[partial_solution_hash] != nil
       
       if (@operation == ".")
-        @choices_hash[key] = [@target]
+        @choices_hash[partial_solution_hash] = [@target]
       else
         new_targets = []
-        if (values.size == 0)
+        if (partial_solution_hash.size == 0)
           new_targets << @target
         else
           if Math.is_commutative?(@operation)
-            sub_result = Math.calculate(@operation, values)
+            sub_result = Math.calculate(@operation, partial_solution_hash.values)
             new_targets << Math.calculate(Math.inverse_operation(@operation), [@target, sub_result])
           else
-            sub_result = Math.calculate(Math.inverse_operation(@operation), values)
+            sub_result = Math.calculate(Math.inverse_operation(@operation), partial_solution_hash.values)
             new_targets << Math.calculate(Math.inverse_operation(@operation), [@target, sub_result])
-            new_targets.concat(Math.calc_all_perms(@operation, [@target].concat(values)).select{|n| n > 0})
+            new_targets.concat(Math.calc_all_perms(@operation, [@target].concat(partial_solution_hash.values)).select{|n| n > 0})
           end
           #puts "New targets: #{new_targets}"
         end
 
         valid_digits = []
-        allow_dups = [number_of_rows, number_of_cols].min > 1
-        number_of_unknowns = @indices.size - values.size
+        indices_to_solve = @indices - partial_solution_hash.keys
+        allowDups = [number_of_rows(indices_to_solve), number_of_cols(indices_to_solve)].min > 1
+        number_of_unknowns = indices_to_solve.size
 
         new_targets.each do |t|
-          solution_sets = Math.solution_set(t, @operation, number_of_unknowns, @grid_side_length, 1, allow_dups)
+          solution_sets = Math.solution_set(t, @operation, number_of_unknowns, @grid_side_length, 1, allowDups)
           valid_digits.concat(solution_sets.flatten)
         end
         
-        @choices_hash[key] = valid_digits.uniq
+        @choices_hash[partial_solution_hash] = valid_digits.uniq
       end
-      @choices_hash[key]
+      @choices_hash[partial_solution_hash]
     end
     
   	def initialize(line, side_length)
@@ -103,12 +102,12 @@ module KenKen
 	    true
   	end
   	
-  	def number_of_rows
-      @indices.map{|i| i/@grid_side_length}.uniq.size
+  	def number_of_rows(index_set)
+      index_set.map{|i| i/@grid_side_length}.uniq.size
   	end
   	
-  	def number_of_cols
-  	  @indices.map{|i| i % @grid_side_length}.uniq.size
+  	def number_of_cols(index_set)
+  	  index_set.map{|i| i % @grid_side_length}.uniq.size
   	end
   	
   	def to_s
@@ -141,6 +140,8 @@ module KenKen
         @cages << Cage.new($~.to_s, @grid_side_length)
         cageRegExp =~ $~.post_match
       end
+      
+      @cages = @cages.sort_by {|cage| cage.indices.size}
         
       #Check that every index from 0 to @grid_size - 1 is covered by exactly one cage
       coveredIndices = []
@@ -149,11 +150,10 @@ module KenKen
       end
       
       coveredIndices.sort!
-      
       gridIndices = (0..@grid_size-1).to_a
       
       unless coveredIndices == gridIndices
-        raise Invalid, "The indexes #{gridIndices - coveredIndices} are not covered by the cages." 
+        raise Invalid, "Either the indexes #{gridIndices - coveredIndices} are not covered by the cages or the indexes #{coveredIndices - gridIndices} are duplicated" 
       end
       
       #Finally check that all cages are connected
@@ -190,8 +190,11 @@ module KenKen
     end
     
     def each_unknown
-      0.upto(@grid_side_length - 1) do |row|
-        0.upto(@grid_side_length - 1) do |col|
+      #Since the cages partition the grid, enumerate through them
+      @cages.each do |cage|
+        cage.indices.each do |index|
+          row = index/@grid_side_length
+          col = index % @grid_side_length
           next unless self[row,col] == nil
           yield row, col
         end
@@ -205,17 +208,16 @@ module KenKen
     def available_digits(row, col)
       #puts "Checking cell (#{row}, #{col})"
       cage = cage_at(row, col)
-      
-      if (cage.operation == ".") 
-        return [cage.target]
-      end
-      
+
       available = all_digits - row_digits(row) - col_digits(col)
       
       #Need to intersect these now with the allowed values inside the cage
-      solved_digits = cage_digits(cage)
+      partial_cage_solution = {}
+      cage.indices.each do |i|
+        partial_cage_solution[i] = @grid[i] unless @grid[i] == nil
+      end
       
-      (available & cage.choices_for_values(solved_digits)).uniq
+      (available & cage.choices_for_values(partial_cage_solution)).uniq
     end
       
     def row_digits(row)
@@ -304,7 +306,7 @@ module KenKen
     end
     
     #Brute force checks the various integral combinations
-    def solution_set(target, operation, number_of_unknowns, max, min=1, duplicateOperands=false)
+    def solution_set(target, operation, number_of_unknowns, max, min=1, allowDups=false)
       range = (min..max).to_a
       possible_values = [].concat(range)
            
@@ -312,8 +314,8 @@ module KenKen
           return [[target] & possible_values]
       end
       
-      if (duplicateOperands)
-        (min + 1).upto(max) do |n|
+      if (allowDups)
+        1.upto(number_of_unknowns) do |n|
           possible_values = possible_values.concat(range)
         end
       end
