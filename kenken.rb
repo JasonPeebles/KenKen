@@ -61,7 +61,7 @@ module KenKen
         number_of_unknowns = indices_to_solve.size
 
         new_targets.each do |t|
-          solution_sets = Math.solution_set(t, @operation, number_of_unknowns, @grid_side_length, 1, number_of_dups)
+          solution_sets = Math.solution_set(t, @operation, number_of_unknowns, @grid_side_length, number_of_dups)
           valid_digits.concat(solution_sets.flatten)
         end
         
@@ -124,7 +124,7 @@ module KenKen
       unless (Regexp.new(PuzzlePattern) =~ s) == 0
         raise Invalid, "#{s} is not a valid Puzzle specifier"
       end
-      
+      @time_started = nil
       @grid_side_length = $~[:grid_side_length].to_i
       @grid_size = @grid_side_length**2
       #This array will hold the values at each index
@@ -172,6 +172,14 @@ module KenKen
     
     def grid_side_length
       @grid_side_length
+    end
+    
+    def time_started
+      @time_started
+    end
+    
+    def time_started=(val)
+      @time_started = val
     end
     
     def all_digits
@@ -306,13 +314,22 @@ module KenKen
     end
     
     #Brute force checks the various integral combinations
-    def solution_set(target, operation, number_of_unknowns, max, min=1, number_of_dups=0)
-      range = (min..max).to_a
-      possible_values = [].concat(range)
-           
+    def solution_set(target, operation, number_of_unknowns, max, number_of_dups=0)     
       if (number_of_unknowns == 1)
-          return [[target] & possible_values]
+          return [[target] & (1..max).to_a]
       end
+      
+      range = case operation
+      when "+"
+        (1..([max, target-1].min)).to_a
+      when "*"
+        (1..([max, target].min)).to_a.select{|n| target % n == 0}
+      else
+        (1..max).to_a
+      end
+      
+      possible_values = [].concat(range)
+      
       
       if (number_of_dups > 0)
         1.upto(number_of_dups) do |n|
@@ -369,13 +386,33 @@ module KenKen
     return row_min, col_min, possibilities_min
   end
   
+  def KenKen.time_elapsed(time)
+    total = Time.now - time
+    secs_per_hour = 60**2
+    secs_per_min = 60
+    
+    string = ""
+    hours = total.floor/secs_per_hour
+    string << "#{hours} hour"+(hours==1 ? " ":"s ") if hours > 0
+    remainder = total.floor % secs_per_hour
+    minutes = remainder/secs_per_min
+    string << "#{minutes} minute"+(minutes==1 ? " ":"s ") if minutes > 0
+    remainder = total % secs_per_min
+    string << "#{remainder} seconds"
+  end
+  
   def KenKen.solve(puzzle)
     puzzle_copy = puzzle.dup
+    
+    if (puzzle_copy.time_started == nil)
+      puzzle_copy.time_started = Time.now
+    end
     
     row, col, possibilities = scan(puzzle_copy)
     
     if row == nil
       puts "SOLVED!"
+      puts "Time Elapsed: " + time_elapsed(puzzle_copy.time_started)
       return puzzle_copy
     end
     
@@ -393,6 +430,7 @@ module KenKen
       end
     end
     
+    puts "Time Elapsed: " + time_elapsed(puzzle_copy.time_started)
     raise Impossible
   end
 end
