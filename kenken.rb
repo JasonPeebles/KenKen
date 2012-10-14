@@ -57,11 +57,11 @@ module KenKen
 
         valid_digits = []
         indices_to_solve = @indices - partial_solution_hash.keys
-        allowDups = [number_of_rows(indices_to_solve), number_of_cols(indices_to_solve)].min > 1
+        number_of_dups = [number_of_rows(indices_to_solve), number_of_cols(indices_to_solve)].min - 1
         number_of_unknowns = indices_to_solve.size
 
         new_targets.each do |t|
-          solution_sets = Math.solution_set(t, @operation, number_of_unknowns, @grid_side_length, 1, allowDups)
+          solution_sets = Math.solution_set(t, @operation, number_of_unknowns, @grid_side_length, 1, number_of_dups)
           valid_digits.concat(solution_sets.flatten)
         end
         
@@ -306,7 +306,7 @@ module KenKen
     end
     
     #Brute force checks the various integral combinations
-    def solution_set(target, operation, number_of_unknowns, max, min=1, allowDups=false)
+    def solution_set(target, operation, number_of_unknowns, max, min=1, number_of_dups=0)
       range = (min..max).to_a
       possible_values = [].concat(range)
            
@@ -314,8 +314,8 @@ module KenKen
           return [[target] & possible_values]
       end
       
-      if (allowDups)
-        1.upto(number_of_unknowns) do |n|
+      if (number_of_dups > 0)
+        1.upto(number_of_dups) do |n|
           possible_values = possible_values.concat(range)
         end
       end
