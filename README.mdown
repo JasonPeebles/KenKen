@@ -1,0 +1,53 @@
+KenKen Solver
+-------------
+
+KenKen is number puzzle game in the same vein as Sudoku.  Here's an example
+4x4 KenKen puzzle.
+
+![KenKen Puzzle](JasonPeebles.github.com/KenKen/4x4kenken.gif)
+
+The object is to place the numbers 1 through 4 (or, for a general n x n puzzle, the numbers 1 through n) in each of the squares. These numbers cannot repeat in any row or column.
+
+In addition, each puzzle has "cages", which are groups of squares. The cages partition the grid of squares. Each cage has a target number and mathematical sign indicating how the values inside a cage must interact to produce the target.
+
+To use the KenKen solver, you must pass a specially formatted string to the constructor of the KenKen::Puzzle class
+
+`puzzle = KenKen::Puzzle.new(<format_string>)`
+
+The format string is structured  as follows for an n x n grid (n a positive integer):
+
+`"n <cage1_string> <cage2_string> ... <cageK_string>"`
+
+Each cage string has the following format
+
+`"<target><operation> <index1> <index2> ... <indexM> |"`
+
+The `|` symbol represents the end of a cage. The cage indexes are the numbered positions of each of the squares starting at 0 in the top left corner and continuing from left to right, top to bottom, to n^2 - 1 in the bottom right corner.
+
+`<target>` is the integer representing that cage's target.
+
+`<operation>` is a character representing one of the five allowable operations:
+
+* Addition: \+
+* Subtraction: \-
+* Multiplication: \*
+* Division: /
+* No operation: \.
+
+In the above example, our format string would be
+
+`"4 2/ 0 1 | 3* 2 3 6 | 8+ 4 5 9 | 4. 7 | 3- 8 12 | 4. 10 | 6* 11 15 | 2/ 13 14 |"`
+
+The order in which the cages are listed is not important.
+
+Calling `KenKen::Solve(<puzzle object>)` will attempt to find a solution, outputting the result if found or throwing an exception if the puzzle is over/under-constrained.
+
+For our example we'd solve the puzzle like this
+
+Instantiate the Puzzle object:
+
+`puzzle = KenKen::Puzzle.new("4 2/ 0 1 | 3* 2 3 6 | 8+ 4 5 9 | 4. 7 | 3- 8 12 | 4. 10 | 6* 11 15 | 2/ 13 14 |")`
+
+Then call:
+
+`puts KenKen::Solve(puzzle)`

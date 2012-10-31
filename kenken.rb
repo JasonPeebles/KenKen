@@ -362,17 +362,9 @@ module KenKen
         
         case possibilities.size
         when 0
-          puts "?????????????????????????????????"
-          puts "Impossible! No values for cell (#{row}, #{col})"
-          puts "#{puzzle}"
-          puts "?????????????????????????????????"
           raise Impossible
         when 1
           puzzle[row, col] = possibilities[0]
-          puts "================================="
-          puts "(#{row}, #{col}) is #{possibilities[0]}"
-          puts "#{puzzle}"
-          puts "================================="
           puzzle_unchanged = false
         else
           if puzzle_unchanged && possibilities.size < min
@@ -418,11 +410,6 @@ module KenKen
     
     possibilities.each do |possibility|
       puzzle_copy[row, col] = possibility      
-      puts "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
-      puts "Guessing #{possibility} in cell (#{row}, #{col})"
-      puts "#{puzzle_copy}"
-      puts "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
-      
       begin
         return solve(puzzle_copy)
       rescue Impossible
