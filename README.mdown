@@ -4,7 +4,7 @@ KenKen Solver
 KenKen is number puzzle game in the same vein as Sudoku.  Here's an example
 4x4 KenKen puzzle.
 
-![KenKen Puzzle](JasonPeebles.github.com/KenKen/4x4kenken.gif)
+![KenKen Puzzle](http://github.com/JasonPeebles/KenKen/raw/master/4x4kenken.gif)
 
 The object is to place the numbers 1 through 4 (or, for a general n x n puzzle, the numbers 1 through n) in each of the squares. These numbers cannot repeat in any row or column.
 
